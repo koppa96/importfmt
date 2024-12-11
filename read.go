@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
-	"os"
 )
 
 func readFile(path ...string) (*dst.File, error) {
