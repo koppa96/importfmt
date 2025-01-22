@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/dave/dst/decorator"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +23,32 @@ var cmd = &cobra.Command{
 			)
 		}
 
-		f, err := readFile(args...)
+		var reader io.ReadCloser
+		if len(args) > 0 {
+			file, err := os.Open(args[0])
+			if err != nil {
+				return fmt.Errorf("failed to open file '%s': %w", args[0], err)
+			}
+			defer file.Close()
+
+			reader = file
+		} else {
+			reader = os.Stdin
+		}
+
+		var preformattedCode io.Reader
+		runGolines, _ := cmd.Flags().GetBool("invoke-golines")
+		if runGolines {
+			var golinesBuf bytes.Buffer
+			err := invokeGolines(reader, &golinesBuf)
+			if err != nil {
+				return err
+			}
+
+			preformattedCode = &golinesBuf
+		}
+
+		f, err := decorator.Parse(preformattedCode)
 		if err != nil {
 			return err
 		}
@@ -33,31 +59,18 @@ var cmd = &cobra.Command{
 			return fmt.Errorf("failed to format file: %w", err)
 		}
 
-		runGolines, _ := cmd.Flags().GetBool("invoke-golines")
-		if runGolines {
-			reader := bytes.NewReader(buf.Bytes())
-
-			var golinesBuf bytes.Buffer
-			err = invokeGolines(reader, &golinesBuf)
-			if err != nil {
-				return err
-			}
-
-			buf = golinesBuf
-		}
-
 		if write {
+			reader.Close()
 			file, err := os.Create(args[0])
 			if err != nil {
 				return fmt.Errorf("failed to create file '%s': %w", args[0], err)
 			}
+			defer file.Close()
 
 			_, err = buf.WriteTo(file)
 			if err != nil {
 				return fmt.Errorf("failed to write formatted file to '%s': %w", args[0], err)
 			}
-
-			defer file.Close()
 		} else {
 			_, err = buf.WriteTo(os.Stdout)
 			if err != nil {
@@ -85,7 +98,7 @@ func invokeGolines(reader io.Reader, writer io.Writer) error {
 func main() {
 	cmd.Flags().BoolP("write", "w", false, "Set to true to write the result to the file")
 	cmd.Flags().
-		Bool("invoke-golines", false, "If set to true, then after formatting, this tool invokes golines to format the rest of the file")
+		Bool("invoke-golines", false, "If set to true, this tool invokes golines to format, then formats the imports")
 
 	if err := cmd.Execute(); err != nil {
 		println(err)
