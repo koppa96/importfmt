@@ -46,6 +46,8 @@ var cmd = &cobra.Command{
 			}
 
 			preformattedCode = &golinesBuf
+		} else {
+			preformattedCode = reader
 		}
 
 		f, err := decorator.Parse(preformattedCode)
